@@ -344,3 +344,10 @@ assign( CQuery.prototype, {
     return req;
   }
 })
+
+if( ! ("undefined" == typeof window ) ) {
+	window.Conductrics = window.Conductrics || {}
+	window.Conductrics.Comma = Comma
+}
+if( ! ("undefined" == typeof define ) ) define ['Comma'], Comma
+if( ! ("undefined" == typeof module ) ) module.exports = Comma

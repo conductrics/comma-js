@@ -1,12 +1,15 @@
 var assign = Object.assign || function(a, b) {
-  for( var k in b ) a[k] = b[k];
+  if(b) for(var k in b) a[k] = b[k];
   return a;
 }
 
 function Comma(opts, doc) {
+	opts = assign({
+		api: 'local'
+	}, opts)
 	this.doc = doc;
 	this.cq = new CQuery(opts.jQuery, doc)
-	
+
 	this.opts = assign({
 		log: (console && console.log && localStorage && localStorage.getItem('c-conductrics-debug') == 'true'),
 		events: 'click mouseover change', // TODO - phase this out and just decorate with separate listeners?
@@ -34,12 +37,12 @@ function Comma(opts, doc) {
 		api: 'local'
 	}, opts);
 
-	if( opts.api instanceof Conductrics.ClientApi ) {
+	if( Conductrics && Conductrics.ClientApi && opts.api instanceof Conductrics.ClientApi ) {
 		this.exec = this._exec_local
 	} else if( opts.api == 'local' ) {
 		this.exec = this._exec_local
 		opts.api = new Conductrics.ClientApi()
-	} else if('string' == typeof opts.api) {
+	} else if( 'string' == typeof opts.api ) {
 		this.exec = this._exec_ajax
 	} else throw new Error("Unknown executor")
 
@@ -58,17 +61,25 @@ assign( Comma.prototype, {
 			p, a, v, el, v_add, i, j, k;
 		for(i = 0; i < selected.length; i++) {
 			p = opts.agentParser(el = selected[i]), a = p.a, v = p.v;
-			if( ! valid_code(a) ) return;
+			if( ! valid_code(a) ) {
+				this.log("Invalid agent code:" + a);
+				return;
+			}
 			agents[a] = agents[a] || { variations: { } }
 			v_add = function(v) {
 				v = v.toLowerCase();
-				if( ! valid_code(v) ) return;
+				if( ! valid_code(v) ) {
+					this.log("Invalid variation code: " + v + " specified for agent: " + a)
+					return;
+				}
 				(agents[a].variations[v] = agents[a].variations[v] || { els: [ ] }).els.push(el)
 			}
 			v_add(v);
-			for( j = 0; j < el.attributes.length; j++)
-				for( k = 0; k < prefixes.length; k++)
+			for( j = 0; j < el.attributes.length; j++) {
+				for( k = 0; k < prefixes.length; k++) {
 					v_add(el.attributes[j].name.split(prefixes[k])[1])
+				}
+			}
 			this.cq.addClass(el, opts.variationClass);
 			this.log("Found element for agent "+a+":", el)
 		}
@@ -79,8 +90,9 @@ assign( Comma.prototype, {
 			found, commands, cb = cb || function(){}
 		
 		// our recommeneded "fallback snippet" should be present with this id; we'll add a rudimentary one ourselves to control flicker if snippet not present (see #420)
-		if( this.cq.select("style#"+opts.styleId).length == 0 )
+		if( this.cq.select("style#"+opts.styleId).length == 0 ) {
 			this.cq.addStyleTag("."+opts.variationClass+" {display: none !important}", opts.styleId)
+		}
 
 		this.cq.ready(function() {
 			// bail if the body has been tagged with .c-markup-fallback, which is an indication that outside process has decided we shouldn't run
@@ -91,8 +103,9 @@ assign( Comma.prototype, {
 			// find agents, goals, etc
 			found = this.find()
 			commands = []
-			for( k in found.agents )
+			for( k in found.agents ) {
 				commands.push({ a: found.agents[k] })
+			}
 
 			this.exec(commands, function(err, res) {
 				if( err ) return cb(err)
@@ -146,8 +159,8 @@ assign( Comma.prototype, {
 			if( ! (sel in a_item.variations) ) sel = Object.keys(a_item.variations)[0] // first variation
 			// corresponding "found" object for the agent selection
 			v_item = a_item.variations[sel]
-			// showing
 			if( ! (els = v_item.els) ) return;
+			// showing
 			for( i = 0; i < els.length; i++) {
 				if( el.hasAttribute(attr = opts.textAttribute+"-"+sel) ) {
 					this.cq.textSet(el, el.getAttribute(attr))
@@ -201,8 +214,7 @@ assign( Comma.prototype, {
 			error: handler
 		})
 	},
-	// default "agent parser" - get agent and variation codes from element
-	agentParser: function(el) {
+	agentParser: function(el) { // default "agent parser" - get agent and variation codes from element
 		var a, attr, ret = { a: '', v: null }
 		if( el && el.getAttribute ) {
 			a = (el.getAttribute(this.options.agentAttribute) || '').split(' ')
@@ -211,8 +223,7 @@ assign( Comma.prototype, {
 		}
 		return ret;
 	},
-	// default "goal parser" - get goal code and (optional) numeric reward from element
-	goalParser: function(el) {
+	goalParser: function(el) { // default "goal parser" - get goal code and (optional) numeric reward from element
 		var a, attr, ret = { g: '', v: null, e: 'click' }
 		if( el && el.getAttribute ) {
 			a = (el.getAttribute(this.options.goalAttribute) || '').split(' ')
@@ -349,5 +360,5 @@ if( ! ("undefined" == typeof window ) ) {
 	window.Conductrics = window.Conductrics || {}
 	window.Conductrics.Comma = Comma
 }
-if( ! ("undefined" == typeof define ) ) define ['Comma'], Comma
+if( ! ("undefined" == typeof define ) ) define(['Comma'], Comma)
 if( ! ("undefined" == typeof module ) ) module.exports = Comma
